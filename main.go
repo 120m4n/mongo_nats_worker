@@ -75,35 +75,41 @@ func startWorkerPool(numWorkers int, docsChan <-chan model.Document, collection 
 	for i := 0; i < numWorkers; i++ {
 		go func(id int) {
 			for doc := range docsChan {
-				uniqueId := doc.UniqueId
-				coords := doc.Location.Coordinates
-				if len(coords) != 2 {
-					log.Printf("Worker %d: Coordenadas inválidas para UniqueId %s", id, uniqueId)
-					continue
-				}
-				lat, lon := coords[0], coords[1]
-				store := false
-				lastCoordsMutex.Lock()
-				prev, exists := lastCoords[uniqueId]
-				if !exists {
-					// No existe coordenada previa, almacenar y registrar
-					lastCoords[uniqueId] = [2]float64{lat, lon}
-					store = true
-				} else {
-					dist := haversine(prev[0], prev[1], lat, lon)
-					if dist >= 5.0 {
-						lastCoords[uniqueId] = [2]float64{lat, lon}
-						store = true
-					}
-				}
-				lastCoordsMutex.Unlock()
-				if store {
-					processDocument(id, doc, collection)
-				} else {
-					log.Printf("Worker %d: Coordenada ignorada para UniqueId %s, distancia < 5m", id, uniqueId)
-				}
+				handleDocument(id, doc, collection, lastCoords, lastCoordsMutex)
 			}
 		}(i)
+	}
+}
+
+func handleDocument(id int, doc model.Document, collection *mongo.Collection, lastCoords map[string][2]float64, lastCoordsMutex *sync.Mutex) {
+	uniqueId := doc.UniqueId
+	coords := doc.Location.Coordinates
+	if len(coords) != 2 {
+		log.Printf("Worker %d: Coordenadas inválidas para UniqueId %s", id, uniqueId)
+		return
+	}
+	lat, lon := coords[0], coords[1]
+	store := false
+
+	lastCoordsMutex.Lock()
+	prev, exists := lastCoords[uniqueId]
+	if !exists {
+		// No existe coordenada previa, almacenar y registrar
+		lastCoords[uniqueId] = [2]float64{lat, lon}
+		store = true
+	} else {
+		dist := haversine(prev[0], prev[1], lat, lon)
+		if dist >= 5.0 {
+			lastCoords[uniqueId] = [2]float64{lat, lon}
+			store = true
+		}
+	}
+	lastCoordsMutex.Unlock()
+
+	if store {
+		processDocument(id, doc, collection)
+	} else {
+		log.Printf("Worker %d: Coordenada ignorada para UniqueId %s, distancia < 5m", id, uniqueId)
 	}
 }
 
@@ -150,19 +156,19 @@ func haversine(lat1, lon1, lat2, lon2 float64) float64 {
 }
 func validateDocument(doc model.Document) error {
 	if doc.UniqueId == "" {
-		return errors.New("UniqueId vacío")
+		return errors.New("uniqueId vacío")
 	}
 	if doc.UserId == "" {
-		return errors.New("UserId vacío")
+		return errors.New("userId vacío")
 	}
 	if doc.Fleet == "" {
-		return errors.New("Fleet vacío")
+		return errors.New("fleet vacío")
 	}
 	if doc.Location.Type == "" {
-		return errors.New("Location.Type vacío")
+		return errors.New("kocation.Type vacío")
 	}
 	if len(doc.Location.Coordinates) != 2 {
-		return errors.New("Location.Coordinates debe tener longitud 2 (lat,lon)")
+		return errors.New("location.Coordinates debe tener longitud 2 (lat,lon)")
 	}
 	// Puedes agregar más validaciones según tu modelo
 	return nil
