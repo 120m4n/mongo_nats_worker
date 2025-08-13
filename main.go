@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -51,7 +53,14 @@ func main() {
 
 	// Pool de workers
 	numWorkers := 5 // puedes ajustar este valor
-	startWorkerPool(numWorkers, docsChan, collection)
+
+	// Mapa en memoria para última coordenada por UniqueId
+	lastCoords := make(map[string][2]float64)
+
+	// Mutex para acceso concurrente al mapa
+	var lastCoordsMutex = &sync.Mutex{}
+
+	startWorkerPool(numWorkers, docsChan, collection, lastCoords, lastCoordsMutex)
 
 	// Subscribe to "coordinates" topic
 	if err := subscribeCoordinates(nc, docsChan); err != nil {
@@ -62,12 +71,37 @@ func main() {
 	select {}
 }
 
-// startWorkerPool launches a pool of workers to process documents
-func startWorkerPool(numWorkers int, docsChan <-chan model.Document, collection *mongo.Collection) {
+func startWorkerPool(numWorkers int, docsChan <-chan model.Document, collection *mongo.Collection, lastCoords map[string][2]float64, lastCoordsMutex *sync.Mutex) {
 	for i := 0; i < numWorkers; i++ {
 		go func(id int) {
 			for doc := range docsChan {
-				processDocument(id, doc, collection)
+				uniqueId := doc.UniqueId
+				coords := doc.Location.Coordinates
+				if len(coords) != 2 {
+					log.Printf("Worker %d: Coordenadas inválidas para UniqueId %s", id, uniqueId)
+					continue
+				}
+				lat, lon := coords[0], coords[1]
+				store := false
+				lastCoordsMutex.Lock()
+				prev, exists := lastCoords[uniqueId]
+				if !exists {
+					// No existe coordenada previa, almacenar y registrar
+					lastCoords[uniqueId] = [2]float64{lat, lon}
+					store = true
+				} else {
+					dist := haversine(prev[0], prev[1], lat, lon)
+					if dist >= 5.0 {
+						lastCoords[uniqueId] = [2]float64{lat, lon}
+						store = true
+					}
+				}
+				lastCoordsMutex.Unlock()
+				if store {
+					processDocument(id, doc, collection)
+				} else {
+					log.Printf("Worker %d: Coordenada ignorada para UniqueId %s, distancia < 5m", id, uniqueId)
+				}
 			}
 		}(i)
 	}
@@ -105,6 +139,15 @@ func subscribeCoordinates(nc *nats.Conn, docsChan chan<- model.Document) error {
 }
 
 // validateDocument verifica los campos obligatorios y formato básico
+// haversine calcula la distancia en metros entre dos puntos lat/lon
+func haversine(lat1, lon1, lat2, lon2 float64) float64 {
+	const R = 6371000.0 // radio de la Tierra en metros
+	dLat := (lat2 - lat1) * math.Pi / 180.0
+	dLon := (lon2 - lon1) * math.Pi / 180.0
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1*math.Pi/180.0)*math.Cos(lat2*math.Pi/180.0)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return R * c
+}
 func validateDocument(doc model.Document) error {
 	if doc.UniqueId == "" {
 		return errors.New("UniqueId vacío")

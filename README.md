@@ -72,10 +72,23 @@ type MongoLocation struct {
 
 ## Observaciones
 
+
 - El worker permanece activo indefinidamente esperando mensajes.
 - Si faltan variables de entorno, se usan valores por defecto, pero se recomienda configurarlas.
 - El contenedor es minimalista (`FROM scratch`) y sólo ejecuta el binario compilado.
 - Se espera que los mensajes publicados en NATS bajo el tópico `coordinates` tengan el formato JSON del documento mostrado arriba, incluyendo el campo `location` con tipo y coordenadas.
+
+## Nueva funcionalidad: Filtrado por distancia mínima
+
+- El worker almacena en MongoDB solo las coordenadas que estén a 5 metros o más de la última almacenada para cada `UniqueId`.
+- Si no existe coordenada previa para un `UniqueId`, se almacena la primera que llegue y se registra como referencia.
+- El cálculo de distancia se realiza usando la fórmula de Haversine.
+
+### Limitaciones
+
+- El estado de la última coordenada por `UniqueId` se mantiene en memoria. Si el worker se reinicia, se pierde este estado y se almacenará la primera coordenada que llegue nuevamente.
+- Si se ejecutan múltiples instancias del worker, cada una tendrá su propio estado en memoria y podrían almacenar coordenadas duplicadas si reciben mensajes simultáneamente.
+- Para alta durabilidad y consistencia, se recomienda persistir la última coordenada en MongoDB y consultarla antes de insertar, aunque esto puede impactar el rendimiento.
 
 ---
 
