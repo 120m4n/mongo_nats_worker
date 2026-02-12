@@ -14,7 +14,15 @@ type Config struct {
     DatabaseName        string
     Coor_CollectionName string
     Hook_CollectionName string
-    DistanceThreshold   float64 // Nuevo campo
+    DistanceThreshold   float64
+    
+    // TimescaleDB config
+    DBType         string // "mongo" or "timescale"
+    PostgresHost   string
+    PostgresPort   string
+    PostgresUser   string
+    PostgresPass   string
+    PostgresDB     string
 }
 
 func LoadConfig() Config {
@@ -29,7 +37,15 @@ func LoadConfig() Config {
         DatabaseName:        getEnv("DATABASE_NAME", "test"),
         Coor_CollectionName: getEnv("COORDINATE_COLLECTION_NAME", "coordinates"),
         Hook_CollectionName: getEnv("HOOK_COLLECTION_NAME", "hooks"),
-        DistanceThreshold:   getEnvFloat("DISTANCE_THRESHOLD", 5.0), // Nuevo
+        DistanceThreshold:   getEnvFloat("DISTANCE_THRESHOLD", 5.0),
+        
+        // TimescaleDB config
+        DBType:       getEnv("DB_TYPE", "mongo"),
+        PostgresHost: getEnv("POSTGRES_HOST", "localhost"),
+        PostgresPort: getEnv("POSTGRES_PORT", "5432"),
+        PostgresUser: getEnv("POSTGRES_USER", "gps_admin"),
+        PostgresPass: getEnv("POSTGRES_PASSWORD", "changeme_strong_password"),
+        PostgresDB:   getEnv("POSTGRES_DB", "gps_tracking"),
     }
 }
 
