@@ -121,10 +121,10 @@ func processPosition(id int, pos *models.GPSPosition, ts *storage.TimescaleDB,
 	if prevLoc, exists := cache.Get(cacheKey); exists {
 		atomic.AddInt64(&cacheHits, 1)
 		
-		// Extract coordinates from cached location
+		// Extract coordinates from cached location (GeoJSON format: [lon, lat])
 		if len(prevLoc.Coordinates) >= 2 {
-			prevLat := prevLoc.Coordinates[0]
-			prevLon := prevLoc.Coordinates[1]
+			prevLon := prevLoc.Coordinates[0]
+			prevLat := prevLoc.Coordinates[1]
 			
 			dist := haversineDistance(prevLat, prevLon, newLat, newLon)
 			if dist <= threshold {
@@ -144,10 +144,10 @@ func processPosition(id int, pos *models.GPSPosition, ts *storage.TimescaleDB,
 	} else {
 		atomic.AddInt64(&processedCount, 1)
 		
-		// Actualizar cache con nueva ubicación (formato compatible con MongoDB)
+		// Actualizar cache con nueva ubicación (GeoJSON format: [lon, lat])
 		cache.SetModels(cacheKey, models.MongoLocation{
 			Type:        "Point",
-			Coordinates: []float64{newLat, newLon},
+			Coordinates: []float64{newLon, newLat},
 		})
 	}
 }

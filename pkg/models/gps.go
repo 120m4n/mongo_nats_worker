@@ -53,9 +53,10 @@ func (nm *NATSMessage) ToGPSPosition() *GPSPosition {
 	}
 
 	// Extract coordinates from location
+	// GeoJSON format is [longitude, latitude]
 	if len(nm.Location.Coordinates) >= 2 {
-		gps.Latitude = nm.Location.Coordinates[0]
-		gps.Longitude = nm.Location.Coordinates[1]
+		gps.Longitude = nm.Location.Coordinates[0]
+		gps.Latitude = nm.Location.Coordinates[1]
 	}
 
 	return gps

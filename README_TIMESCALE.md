@@ -110,12 +110,14 @@ The worker expects JSON messages on the `coordinates` NATS topic with the follow
   "fleet": "fleet-789",
   "location": {
     "type": "Point",
-    "coordinates": [40.7128, -74.0060]
+    "coordinates": [-74.0060, 40.7128]
   },
   "ip_origin": "192.168.1.100",
   "last_modified": 1708000000
 }
 ```
+
+**Important**: Coordinates follow the GeoJSON standard format: `[longitude, latitude]`, not `[latitude, longitude]`.
 
 ### Required Fields
 
@@ -123,7 +125,7 @@ The worker expects JSON messages on the `coordinates` NATS topic with the follow
 - `user_id`: User identifier  
 - `fleet`: Fleet identifier
 - `location.type`: Always "Point"
-- `location.coordinates`: Array with [latitude, longitude]
+- `location.coordinates`: Array with **[longitude, latitude]** (GeoJSON format)
 - `last_modified`: Unix timestamp
 
 ## Database Schema

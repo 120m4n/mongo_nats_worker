@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    url: timescaledb:5432
+    database: gps_tracking
+    user: gps_admin
+    secureJsonData:
+      password: changeme_strong_password
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1500
+      timescaledb: true
+    editable: true
