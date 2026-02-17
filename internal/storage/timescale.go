@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -46,10 +47,9 @@ func (ts *TimescaleDB) InsertPosition(ctx context.Context, pos *models.GPSPositi
 	query := `
 		INSERT INTO gps_positions (
 			time, device_id, user_id, fleet, latitude, longitude,
-			altitude, speed, heading, accuracy, battery_level, origin_ip, metadata, geom
+			altitude, speed, heading, accuracy, battery_level, origin_ip, metadata
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-			ST_SetSRID(ST_MakePoint($6, $5), 4326)::geography
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
 	`
 
@@ -66,7 +66,7 @@ func (ts *TimescaleDB) InsertPosition(ctx context.Context, pos *models.GPSPositi
 		pos.Accuracy,
 		pos.BatteryLevel,
 		pos.OriginIP,
-		pos.Metadata,
+		metadataToJSON(pos.Metadata),
 	)
 
 	if err != nil {
@@ -91,10 +91,9 @@ func (ts *TimescaleDB) InsertPositionBatch(ctx context.Context, positions []*mod
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO gps_positions (
 			time, device_id, user_id, fleet, latitude, longitude,
-			altitude, speed, heading, accuracy, battery_level, origin_ip, metadata, geom
+			altitude, speed, heading, accuracy, battery_level, origin_ip, metadata
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-			ST_SetSRID(ST_MakePoint($6, $5), 4326)::geography
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
 	`)
 	if err != nil {
@@ -116,7 +115,7 @@ func (ts *TimescaleDB) InsertPositionBatch(ctx context.Context, positions []*mod
 			pos.Accuracy,
 			pos.BatteryLevel,
 			pos.OriginIP,
-			pos.Metadata,
+			metadataToJSON(pos.Metadata),
 		)
 		if err != nil {
 			return fmt.Errorf("error inserting position in batch: %w", err)
@@ -127,6 +126,17 @@ func (ts *TimescaleDB) InsertPositionBatch(ctx context.Context, positions []*mod
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
+	return nil
+}
+
+// metadataToJSON converts metadata bytes to a valid JSON value for JSONB columns
+func metadataToJSON(data []byte) interface{} {
+	if len(data) == 0 {
+		return nil
+	}
+	if json.Valid(data) {
+		return string(data)
+	}
 	return nil
 }
 

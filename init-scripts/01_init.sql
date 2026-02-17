@@ -4,7 +4,6 @@
 
 -- Habilitar extensión TimescaleDB
 CREATE EXTENSION IF NOT EXISTS timescaledb;
-CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- ==========================================
 -- 1. TABLA PRINCIPAL: Posiciones GPS
@@ -23,7 +22,6 @@ CREATE TABLE IF NOT EXISTS gps_positions (
     battery_level INTEGER,
     origin_ip TEXT,
     metadata JSONB,
-    geom GEOGRAPHY(POINT, 4326),
     
     PRIMARY KEY (time, device_id)
 );
@@ -37,7 +35,6 @@ SELECT create_hypertable('gps_positions', 'time',
 CREATE INDEX IF NOT EXISTS idx_gps_device_time ON gps_positions (device_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_gps_user_time ON gps_positions (user_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_gps_fleet_time ON gps_positions (fleet, time DESC);
-CREATE INDEX IF NOT EXISTS idx_gps_geom ON gps_positions USING GIST(geom);
 CREATE INDEX IF NOT EXISTS idx_gps_metadata ON gps_positions USING GIN(metadata);
 
 -- ==========================================
@@ -64,13 +61,12 @@ BEGIN
     INSERT INTO gps_positions (
         time, device_id, user_id, fleet, latitude, longitude,
         altitude, speed, heading, accuracy,
-        battery_level, origin_ip, metadata, geom
+        battery_level, origin_ip, metadata
     )
     VALUES (
         p_time, p_device_id, p_user_id, p_fleet, p_latitude, p_longitude,
         p_altitude, p_speed, p_heading, p_accuracy,
-        p_battery, p_origin_ip, p_metadata,
-        ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::geography
+        p_battery, p_origin_ip, p_metadata
     );
 END;
 $$ LANGUAGE plpgsql;
