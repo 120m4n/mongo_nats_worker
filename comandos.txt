@@ -1,5 +1,17 @@
-docker build --pull --rm -f Dockerfile -t electrosoftware/geo_worker:latest .
+docker build --pull --rm -f Dockerfile -t electrosoftware/coordinates_worker:latest .
 
+docker push electrosoftware/coordinates_worker:latest
+docker pull electrosoftware/coordinates_worker:latest
+
+--create a docker network
+docker network create --driver bridge --subnet 192.168.1.0/24 my-bridge-network
+
+docker compose -f docker-compose.yml up -d
+docker compose -f docker-compose-worker.yml up -d
+docker compose -f docker-compose-hooks.yml up -d
+
+--creacion de collection coordinates capped
+db.createCollection("coordinates", { capped : true, size : 5242880, max : 5000 } )
 docker push electrosoftware/geo_worker:latest
 docker pull electrosoftware/geo_worker:latest
 

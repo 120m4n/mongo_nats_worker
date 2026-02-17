@@ -3,32 +3,36 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"math"
-	"sync"
+	"sync/atomic"
 	"time"
-
 	"github.com/nats-io/nats.go"
-	// "go.mongodb.org/mongo-driver/bson"
 	"errors"
 
 	"github.com/120m4n/mongo_nats/config"
 	"github.com/120m4n/mongo_nats/model"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"math"
+    "github.com/120m4n/mongo_nats/internal"
+)
+
+// Contadores globales para estadísticas
+var (
+    processedCount   int64
+    errorCount       int64
+    validationErrors int64
+    cacheHits        int64
+    cacheMisses      int64
 )
 
 func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
-	// mostrar las variables configuradas
-	fmt.Printf("Configuración cargada:\n")
-	fmt.Printf("NatsURL: %s\n", cfg.NatsURL)
-	fmt.Printf("MongoURI: %s\n", cfg.MongoURI)
-	fmt.Printf("DatabaseName: %s\n", cfg.DatabaseName)
-	fmt.Printf("Coor_CollectionName: %s\n", cfg.Coor_CollectionName)
+	// Log inicial de configuración (solo al iniciar)
+	log.Printf("Worker iniciado - DB: %s, Collection: %s, Workers: 5", cfg.DatabaseName, cfg.Coor_CollectionName)
 
 	// Connect to NATS server
 	nc, err := nats.Connect(cfg.NatsURL)
@@ -53,14 +57,11 @@ func main() {
 
 	// Pool de workers
 	numWorkers := 5 // puedes ajustar este valor
+	cache := internal.NewCacheManager()
+	startWorkerPool(numWorkers, docsChan, collection, cache, cfg.DistanceThreshold)
 
-	// Mapa en memoria para última coordenada por UniqueId
-	lastCoords := make(map[string][2]float64)
-
-	// Mutex para acceso concurrente al mapa
-	var lastCoordsMutex = &sync.Mutex{}
-
-	startWorkerPool(numWorkers, docsChan, collection, lastCoords, lastCoordsMutex)
+	// Iniciar reporte de estadísticas cada 30 segundos
+	go startStatsReporter()
 
 	// Subscribe to "coordinates" topic
 	if err := subscribeCoordinates(nc, docsChan); err != nil {
@@ -71,14 +72,15 @@ func main() {
 	select {}
 }
 
-func startWorkerPool(numWorkers int, docsChan <-chan model.Document, collection *mongo.Collection, lastCoords map[string][2]float64, lastCoordsMutex *sync.Mutex) {
-	for i := 0; i < numWorkers; i++ {
-		go func(id int) {
-			for doc := range docsChan {
-				handleDocument(id, doc, collection, lastCoords, lastCoordsMutex)
-			}
-		}(i)
-	}
+// startWorkerPool launches a pool of workers to process documents
+func startWorkerPool(numWorkers int, docsChan <-chan model.Document, collection *mongo.Collection, cache *internal.CacheManager, threshold float64) {
+    for i := 0; i < numWorkers; i++ {
+        go func(id int) {
+            for doc := range docsChan {
+                processDocument(id, doc, collection, cache, threshold)
+            }
+        }(i)
+    }
 }
 
 func handleDocument(id int, doc model.Document, collection *mongo.Collection, lastCoords map[string][2]float64, lastCoordsMutex *sync.Mutex) {
@@ -114,14 +116,58 @@ func handleDocument(id int, doc model.Document, collection *mongo.Collection, la
 }
 
 // processDocument handles the insertion of a document into MongoDB
-func processDocument(id int, doc model.Document, collection *mongo.Collection) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err := collection.InsertOne(ctx, doc)
-	if err != nil {
-		log.Printf("Worker %d: Error inserting into MongoDB: %v", id, err)
-	} else {
-		fmt.Printf("Worker %d: Inserted document: %+v\n", id, doc)
+func processDocument(id int, doc model.Document, collection *mongo.Collection, cache *internal.CacheManager, threshold float64) {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    doc.Fecha = time.Unix(doc.LastModified, 0).UTC()
+    uniqueId := doc.UniqueId
+    newLoc := doc.Location
+
+    // Lógica de cache y proximidad
+    if prevLoc, exists := cache.Get(uniqueId); exists {
+		atomic.AddInt64(&cacheHits, 1)
+        dist := haversineDistance(prevLoc.Coordinates[0], prevLoc.Coordinates[1], newLoc.Coordinates[0], newLoc.Coordinates[1])
+        if dist <= threshold {
+            // Si la distancia es menor o igual al umbral, no persistir ni actualizar cache
+            return
+        }
+    } else {
+		atomic.AddInt64(&cacheMisses, 1)
+	}
+
+    // Persistir en MongoDB
+    _, err := collection.InsertOne(ctx, doc)
+    if err != nil {
+        atomic.AddInt64(&errorCount, 1)
+        log.Printf("Worker %d: Error inserting into MongoDB: %v", id, err)
+    } else {
+        atomic.AddInt64(&processedCount, 1)
+        // Actualizar cache con nueva ubicación
+        cache.Set(uniqueId, newLoc)
+    }
+}
+
+// startStatsReporter reporta estadísticas cada 30 segundos
+func startStatsReporter() {
+	ticker := time.NewTicker(120 * time.Second)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		processed := atomic.LoadInt64(&processedCount)
+		errors := atomic.LoadInt64(&errorCount)
+		validationErrs := atomic.LoadInt64(&validationErrors)
+		hits := atomic.LoadInt64(&cacheHits)
+		misses := atomic.LoadInt64(&cacheMisses)
+		log.Printf("Stats - Procesados: %d, Errores DB: %d, Errores validación: %d, Cache hits: %d, Cache misses: %d", 
+			processed, errors, validationErrs, hits, misses)
+
+		// Reset de contadores para evitar crecimiento indefinido
+		atomic.StoreInt64(&processedCount, 0)
+		atomic.StoreInt64(&errorCount, 0)
+		atomic.StoreInt64(&validationErrors, 0)
+		atomic.StoreInt64(&cacheHits, 0)
+		atomic.StoreInt64(&cacheMisses, 0)
 	}
 }
 
@@ -135,7 +181,8 @@ func subscribeCoordinates(nc *nats.Conn, docsChan chan<- model.Document) error {
 		}
 		// Validar el documento antes de enviarlo al canal
 		if err := validateDocument(doc); err != nil {
-			log.Printf("Documento inválido: %v. Datos: %+v", err, doc)
+			atomic.AddInt64(&validationErrors, 1)
+			// Solo loguear errores de validación críticos ocasionalmente
 			return
 		}
 		// Enviar el documento al canal para procesamiento concurrente
@@ -172,4 +219,17 @@ func validateDocument(doc model.Document) error {
 	}
 	// Puedes agregar más validaciones según tu modelo
 	return nil
+}
+
+// haversineDistance calcula la distancia en metros entre dos puntos geográficos
+func haversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
+    const R = 6371000 // Radio de la Tierra en metros
+    latRad1 := lat1 * math.Pi / 180
+    latRad2 := lat2 * math.Pi / 180
+    dLat := (lat2 - lat1) * math.Pi / 180
+    dLon := (lon2 - lon1) * math.Pi / 180
+
+    a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(latRad1)*math.Cos(latRad2)*math.Sin(dLon/2)*math.Sin(dLon/2)
+    c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+    return R * c
 }

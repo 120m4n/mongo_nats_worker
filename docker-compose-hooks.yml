@@ -1,0 +1,14 @@
+services:
+  worker:
+    image: electrosoftware/hooks_worker:latest
+    container_name: hooks_worker
+    environment:
+      - NATS_URL=nats://test-electrosoftware.xyz:4222
+      - MONGO_URI=mongodb://root:example@192.168.1.2:27017
+    networks:
+      my-bridge-network:
+        ipv4_address: 192.168.1.4
+
+networks:
+  my-bridge-network:
+    external: true

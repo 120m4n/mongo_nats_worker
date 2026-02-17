@@ -1,0 +1,62 @@
+services:
+  server:
+    image: electrosoftware/geosmartsystem:2.0-traceo
+    container_name: geo_server
+    ports:
+      - 3002:3002
+    environment:
+      - GIN_MODE=release
+      - SERVER_ADDRESS=server
+      - SERVER_PORT=3002
+      - TILE38_ADDRESS=tile38_server
+      - TILE38_PORT=9851
+      - NATS_ADDRESS=nats_server
+    depends_on:
+      - tile38_server
+      - nats_server
+  tile38_server:
+    image: tile38/tile38
+    container_name: tile38_server
+    volumes:
+      - tile38-data:/data
+    command: ["tile38-server", "-d", "/data"]
+    healthcheck:
+      test: ["CMD", "tile38-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  nats_server:
+    image: nats:latest
+    container_name: nats_server
+    ports:
+      - 4222:4222
+      - 6222:6222
+      - 8222:8222
+  mongo_server:
+    image: mongo
+    container_name: mongo_server
+    restart: always    
+    ports:
+      - 27017:27017
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: punctuate-collie-student-emblaze
+  worker_server:
+    image: electrosoftware/coordinates_worker:1.0
+    container_name: worker_server
+    restart: always 
+    environment:
+      NATS_URL: nats://nats_server:4222
+      MONGO_URI:  mongodb://root:punctuate-collie-student-emblaze@mongo_server:27017/
+    depends_on:
+      - mongo_server
+      - nats_server  
+volumes:
+  tile38-data:
+  mongo-data:
+networks:
+  default:
+    external: true
+    name: scoobydoo

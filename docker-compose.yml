@@ -1,44 +1,19 @@
 services:
-  worker:
-    build:
-      context: .
-    container_name: worker
-    depends_on:
-      - mongo_server
-      - nats_server
-    networks:
-      - network_geosmartsystem
   mongo_server:
-    image: mongo:7.0.6
-    restart: always
+    image: mongo
     container_name: mongo_server
+    restart: always    
     ports:
       - 27017:27017
-    # environment:
-    #   MONGO_INITDB_ROOT_USERNAME: root
-    #   MONGO_INITDB_ROOT_PASSWORD: example
-    networks:
-      - network_geosmartsystem
-  mongo-express:
-    image: mongo-express
-    restart: always
-    ports:
-      - 8081:8081
+    # volumes:
+    #   - ./data:/data/db
     environment:
-      # ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      # ME_CONFIG_MONGODB_ADMINPASSWORD: example
-      ME_CONFIG_MONGODB_URL: mongodb://mongo_server:27017/
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
     networks:
-      - network_geosmartsystem
-  nats_server:
-    image: nats:latest
-    container_name: nats_server
-    ports:
-      - 4222:4222
-      - 6222:6222
-      - 8222:8222
-    networks:
-      - network_geosmartsystem
+      my-bridge-network:
+        ipv4_address: 192.168.1.2
+
 networks:
-  network_geosmartsystem:
+  my-bridge-network:
     external: true
