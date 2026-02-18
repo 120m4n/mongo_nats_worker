@@ -33,7 +33,7 @@ services:
   # TIMESCALE-WRITER (Consumidor NATS → TimescaleDB)
   # ==========================================
   timescale-writer:
-    image: electrosoftware/timescale-writer:v1.1
+    image: electrosoftware/timescale-writer:v1.2
     restart: unless-stopped
     container_name: timescale_writer
     environment:
