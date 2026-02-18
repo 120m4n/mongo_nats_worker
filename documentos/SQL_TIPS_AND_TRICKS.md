@@ -445,6 +445,66 @@ FROM timescaledb_information.compression_settings
 WHERE hypertable_name = 'coordinates_history';
 ```
 
+### Verificar continuous aggregates
+```sql
+-- ⚠️  Los continuous aggregates de TimescaleDB NO aparecen en pg_matviews.
+-- Usar siempre timescaledb_information.continuous_aggregates:
+
+-- Verificar si latest_device_position existe
+SELECT view_name, view_definition 
+FROM timescaledb_information.continuous_aggregates 
+WHERE view_name = 'latest_device_position';
+
+-- ❌ INCORRECTO (siempre retorna false para continuous aggregates)
+-- SELECT EXISTS (SELECT 1 FROM pg_matviews WHERE matviewname = 'latest_device_position');
+```
+
+### Validar y recrear `latest_device_position`
+```sql
+-- Bloque completo para validar existencia y recrear si no existe
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.continuous_aggregates 
+        WHERE view_name = 'latest_device_position'
+    ) THEN
+        RAISE NOTICE 'latest_device_position no existe. Creándola...';
+
+        CREATE MATERIALIZED VIEW latest_device_position
+        WITH (timescaledb.continuous) AS
+        SELECT
+            time_bucket('30 seconds', ts) AS bucket,
+            device_id,
+            fleet,
+            last(ts, ts)        AS last_seen,
+            last(latitude, ts)  AS latitude,
+            last(longitude, ts) AS longitude,
+            last(geom, ts)      AS geom,
+            last(user_id, ts)   AS user_id
+        FROM coordinates_history
+        GROUP BY bucket, device_id, fleet
+        WITH NO DATA;
+
+        PERFORM add_continuous_aggregate_policy(
+            'latest_device_position',
+            start_offset      => INTERVAL '1 hour',
+            end_offset        => INTERVAL '30 seconds',
+            schedule_interval => INTERVAL '30 seconds',
+            if_not_exists     => TRUE
+        );
+
+        RAISE NOTICE 'latest_device_position creada exitosamente.';
+    ELSE
+        RAISE NOTICE 'latest_device_position ya existe.';
+    END IF;
+END
+$$;
+
+-- Para forzar recreación (si tiene definición vieja):
+-- DROP MATERIALIZED VIEW IF EXISTS latest_device_position CASCADE;
+-- Luego ejecutar el bloque DO de arriba.
+```
+
 ---
 
 ## 🔗 Referencias

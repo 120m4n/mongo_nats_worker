@@ -6,6 +6,15 @@
 -- NOTA: TimescaleDB requiere time_bucket() en el GROUP BY de
 -- continuous aggregates. Usamos un bucket de 30 segundos para
 -- tener granularidad alta y simular "última posición por dispositivo".
+--
+-- IMPORTANTE: Los continuous aggregates de TimescaleDB NO aparecen
+-- en pg_matviews. Para verificar su existencia usar:
+--   SELECT * FROM timescaledb_information.continuous_aggregates
+--   WHERE view_name = 'latest_device_position';
+
+-- Eliminar si existe con definición anterior (sin time_bucket)
+-- Descomentar la siguiente línea si necesitas recrear:
+-- DROP MATERIALIZED VIEW IF EXISTS latest_device_position CASCADE;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS latest_device_position
 WITH (timescaledb.continuous) AS
