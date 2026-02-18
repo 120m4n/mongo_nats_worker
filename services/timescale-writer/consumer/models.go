@@ -41,7 +41,7 @@ func DocumentToRow(doc *Document) *CoordinateRow {
 	}
 
 	return &CoordinateRow{
-		Timestamp: time.Unix(doc.LastModified/1000, (doc.LastModified%1000)*int64(time.Millisecond)).UTC(),
+		Timestamp: time.UnixMilli(doc.LastModified).UTC(),
 		DeviceID:  doc.UniqueID,
 		UserID:    doc.UserID,
 		Fleet:     doc.Fleet,
