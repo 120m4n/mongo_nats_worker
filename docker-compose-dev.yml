@@ -6,7 +6,7 @@ services:
     depends_on:
       - mongo_server
     environment:
-      - NATS_URL=nats://test-electrosoftware.xyz:4222
+      - NATS_URL=nats://nats_server:4222
       - MONGO_URI=mongodb://mongo_server:27017/
 
   mongo_server:

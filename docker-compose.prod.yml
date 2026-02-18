@@ -1,0 +1,68 @@
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # TIMESCALEDB + POSTGIS
+  # ==========================================
+  timescaledb:
+    image: timescale/timescaledb-ha:pg17
+    restart: unless-stopped
+    container_name: timescaledb
+    environment:
+      POSTGRES_USER: geo_user
+      POSTGRES_PASSWORD: geo_password
+      POSTGRES_DB: geosmart
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=timescaledb"
+    volumes:
+      - timescale_data:/home/postgres/pgdata/data
+      - ./services/timescale-writer/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geo_user -d geosmart"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared_net
+      - bridge_net
+
+
+  # ==========================================
+  # TIMESCALE-WRITER (Consumidor NATS → TimescaleDB)
+  # ==========================================
+  timescale-writer:
+    image: electrosoftware/timescale-writer:v1.2
+    restart: unless-stopped
+    container_name: timescale_writer
+    environment:
+      NATS_ADDRESS: nats://nats_server:4222
+      NATS_SUBJECT: coordinates
+      TIMESCALE_DSN: postgres://geo_user:geo_password@timescaledb:5432/geosmart?sslmode=disable
+      BATCH_SIZE: 500
+      FLUSH_INTERVAL_MS: 2000
+      HEALTH_PORT: 3010
+    depends_on:
+      - timescaledb
+    ports:
+      - "3010:3010"
+    networks:
+      - shared_net
+      - bridge_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3010/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+
+volumes:
+  timescale_data:
+
+networks:
+  shared_net:
+    external: true
+    name: shared_nats_network
+  bridge_net:
+    driver: bridge

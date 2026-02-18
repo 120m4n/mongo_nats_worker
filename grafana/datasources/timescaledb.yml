@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: grafana-postgresql-datasource
+    url: timescaledb:5432
+    database: geosmart
+    user: geo_user
+    secureJsonData:
+      password: geo_password
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: true
+    editable: true
+    isDefault: true
