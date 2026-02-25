@@ -19,3 +19,14 @@
 
 # Go workspace file
 go.work
+
+# Build artifacts
+mongo_nats_worker
+mongo_nats_worker_timescale
+server
+
+# Docker volumes data
+timescale_data/
+pgadmin_data/
+nats_data/
+grafana_data/

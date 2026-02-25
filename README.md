@@ -1,8 +1,17 @@
 # mongo_nats_worker
 
-Este repositorio implementa un worker en Go que recibe mensajes de NATS y los almacena en MongoDB. Es útil para procesar y almacenar documentos con coordenadas geoespaciales enviados a través de NATS.
+Este repositorio implementa un worker en Go que recibe mensajes de NATS y los almacena en MongoDB o TimescaleDB. Es útil para procesar y almacenar documentos con coordenadas geoespaciales enviados a través de NATS.
 
-## Funcionamiento principal
+## Implementaciones
+
+Este proyecto ofrece dos implementaciones:
+
+1. **MongoDB** (original): Usa MongoDB para almacenamiento de documentos
+2. **TimescaleDB** (nueva): Usa TimescaleDB (PostgreSQL) para almacenamiento time-series optimizado
+
+Ver [README_TIMESCALE.md](README_TIMESCALE.md) para documentación de la implementación TimescaleDB.
+
+## Funcionamiento principal (MongoDB)
 
 - El worker se conecta a un servidor NATS (por defecto `nats://localhost:4222`).
 - Se suscribe al tópico `coordinates`.
