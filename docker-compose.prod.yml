@@ -43,6 +43,7 @@ services:
       BATCH_SIZE: 500
       FLUSH_INTERVAL_MS: 2000
       HEALTH_PORT: 3010
+      DISTANCE_THRESHOLD: 10.0
     depends_on:
       - timescaledb
     ports:

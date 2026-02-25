@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 
+	"github.com/120m4n/timescale-writer/cache"
 	"github.com/120m4n/timescale-writer/config"
 	"github.com/120m4n/timescale-writer/consumer"
 	"github.com/120m4n/timescale-writer/health"
@@ -55,8 +56,12 @@ func main() {
 	bw := writer.NewBatchWriter(pool, cfg.BatchSize, cfg.FlushIntervalMs)
 	bw.Start(context.Background())
 
+	// Crear geo cache para filtrado de posiciones estáticas
+	geoCache := cache.New()
+	log.Printf("[CACHE] Geo cache initialized (distance threshold: %.1f m)", cfg.DistanceThresholdM)
+
 	// Crear NATS consumer
-	handler := consumer.NewHandler(cfg.NatsSubject, bw.InputChannel())
+	handler := consumer.NewHandler(cfg.NatsSubject, bw.InputChannel(), geoCache, cfg.DistanceThresholdM)
 	_, err = handler.Subscribe(nc)
 	if err != nil {
 		log.Fatalf("[CONSUMER] Subscribe failed: %v", err)

@@ -19,6 +19,9 @@ type Config struct {
 
 	// Health
 	HealthPort string
+
+	// Geo cache filter
+	DistanceThresholdM float64
 }
 
 func LoadConfig() *Config {
@@ -32,6 +35,8 @@ func LoadConfig() *Config {
 		FlushIntervalMs: getEnvInt("FLUSH_INTERVAL_MS", 2000),
 
 		HealthPort: getEnv("HEALTH_PORT", "3010"),
+
+		DistanceThresholdM: getEnvFloat("DISTANCE_THRESHOLD", 10.0),
 	}
 }
 
@@ -46,6 +51,15 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
 			return intVal
+		}
+	}
+	return defaultValue
+}
+
+func getEnvFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if f, err := strconv.ParseFloat(value, 64); err == nil {
+			return f
 		}
 	}
 	return defaultValue
